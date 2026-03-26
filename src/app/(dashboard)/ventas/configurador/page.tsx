@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, ChevronRight, Forklift, Zap, Package, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Check, ChevronRight, Forklift, Zap, Package, ArrowRight, ArrowLeft, Search, X } from 'lucide-react';
 import { MACHINE_MODELS, MACHINE_COMPONENTS, ACCESSORIES } from '@/services/configurador.service';
 import { MachineModel, ComponentOption } from '@/types';
 import { Card, CardContent } from '@/components/ui/Card';
@@ -22,6 +22,18 @@ export default function ConfiguradorPage() {
   const [selectedModel, setSelectedModel] = useState<MachineModel | null>(null);
   const [selectedComponents, setSelectedComponents] = useState<Record<string, ComponentOption>>({});
   const [selectedAccessories, setSelectedAccessories] = useState<string[]>([]);
+  const [modelSearch, setModelSearch] = useState('');
+
+  const filteredModels = useMemo(() => {
+    const q = modelSearch.trim().toLowerCase();
+    if (!q) return MACHINE_MODELS;
+    return MACHINE_MODELS.filter(
+      (m) =>
+        m.name.toLowerCase().includes(q) ||
+        m.category.toLowerCase().includes(q) ||
+        m.description.toLowerCase().includes(q)
+    );
+  }, [modelSearch]);
 
   const totalPrice = useMemo(() => {
     const base = selectedModel?.basePrice ?? 0;
@@ -87,8 +99,35 @@ export default function ConfiguradorPage() {
         {step === 1 && (
           <div className="animate-fade-in">
             <h2 className="text-lg font-semibold mb-4">Seleccioná el modelo base</h2>
+
+            {/* Search */}
+            <div className="relative mb-5">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Buscar equipo por nombre, categoría..."
+                value={modelSearch}
+                onChange={(e) => setModelSearch(e.target.value)}
+                className="w-full pl-9 pr-9 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+              />
+              {modelSearch && (
+                <button
+                  onClick={() => setModelSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {MACHINE_MODELS.map((model) => {
+              {filteredModels.length === 0 && (
+                <div className="col-span-3 py-12 text-center text-muted-foreground">
+                  <Search size={32} className="mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">No se encontraron equipos para <span className="font-medium text-foreground">&quot;{modelSearch}&quot;</span></p>
+                </div>
+              )}
+              {filteredModels.map((model) => {
                 const active = selectedModel?.id === model.id;
                 return (
                   <Card

@@ -27,7 +27,7 @@ export default function VentasPage() {
           <h1 className="text-2xl font-bold tracking-tight">Ventas</h1>
           <p className="text-muted-foreground mt-1">Gestión de configuraciones y cotizaciones</p>
         </div>
-        <Link href="/ventas/configurador">
+        <Link href="/sales/configurator">
           <Button>
             <Settings size={16} />
             Nueva configuración
@@ -56,7 +56,7 @@ export default function VentasPage() {
 
       {/* Quick access */}
       <div className="grid md:grid-cols-2 gap-4">
-        <Link href="/ventas/configurador">
+        <Link href="/sales/configurator">
           <Card className="border-border hover:border-primary/50 hover:-translate-y-0.5 hover:shadow-md transition-all cursor-pointer group">
             <CardContent className="p-6 flex items-center gap-5">
               <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
@@ -70,7 +70,7 @@ export default function VentasPage() {
           </Card>
         </Link>
 
-        <Link href="/ventas/cotizacion">
+        <Link href="/sales/quotation">
           <Card className="border-border hover:border-primary/50 hover:-translate-y-0.5 hover:shadow-md transition-all cursor-pointer group">
             <CardContent className="p-6 flex items-center gap-5">
               <div className="w-14 h-14 rounded-xl bg-blue-50 flex items-center justify-center group-hover:bg-blue-100 transition-colors">
@@ -92,7 +92,7 @@ export default function VentasPage() {
             <CardTitle>Cotizaciones recientes</CardTitle>
             <CardDescription>Últimas 4 cotizaciones del sistema</CardDescription>
           </div>
-          <Link href="/ventas/cotizacion">
+          <Link href="/sales/quotation">
             <Button variant="ghost" size="sm">Ver todas</Button>
           </Link>
         </CardHeader>

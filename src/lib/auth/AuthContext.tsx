@@ -1,43 +1,22 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import api from '@/services/api';
 
 export interface User {
-  id: string;
+  id: number;
   name: string;
   email: string;
   role: string;
-  avatar?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (username: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
 }
-
-const MOCK_USERS: Record<string, { password: string; user: User }> = {
-  admin: {
-    password: 'admin123',
-    user: {
-      id: '1',
-      name: 'Administrador',
-      email: 'admin@hecato.com',
-      role: 'Administrador',
-    },
-  },
-  vendedor: {
-    password: 'venta123',
-    user: {
-      id: '2',
-      name: 'Carlos Martínez',
-      email: 'carlos@hecato.com',
-      role: 'Vendedor',
-    },
-  },
-};
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -52,25 +31,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(JSON.parse(stored));
       } catch {
         localStorage.removeItem('hecato_user');
+        localStorage.removeItem('hecato_token');
       }
     }
     setIsLoading(false);
   }, []);
 
-  const login = useCallback(async (username: string, password: string): Promise<boolean> => {
-    await new Promise((r) => setTimeout(r, 800)); // simulate API delay
-    const match = MOCK_USERS[username.toLowerCase()];
-    if (match && match.password === password) {
-      setUser(match.user);
-      localStorage.setItem('hecato_user', JSON.stringify(match.user));
+  const login = useCallback(async (email: string, password: string): Promise<boolean> => {
+    try {
+      const response = await api.post('/api/v1/auth/login', { email, password });
+      const { token, user: apiUser } = response.data.data;
+
+      // Derive a display name from the email (part before @)
+      const name = apiUser.email.split('@')[0];
+      const user: User = { id: apiUser.id, name, email: apiUser.email, role: apiUser.role };
+
+      localStorage.setItem('hecato_token', token);
+      localStorage.setItem('hecato_user', JSON.stringify(user));
+      setUser(user);
       return true;
+    } catch {
+      return false;
     }
-    return false;
   }, []);
 
   const logout = useCallback(() => {
     setUser(null);
     localStorage.removeItem('hecato_user');
+    localStorage.removeItem('hecato_token');
   }, []);
 
   return (

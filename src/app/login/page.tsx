@@ -12,7 +12,7 @@ export default function LoginPage() {
   const { login } = useAuth();
   const router = useRouter();
 
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -22,10 +22,10 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     setLoading(true);
-    const ok = await login(username, password);
+    const ok = await login(email, password);
     setLoading(false);
     if (ok) {
-      router.push('/ventas');
+      router.push('/sales');
     } else {
       setError('Usuario o contraseña incorrectos.');
     }
@@ -96,13 +96,14 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="username">Usuario</Label>
+              <Label htmlFor="email">Email</Label>
               <Input
-                id="username"
-                placeholder="ej: admin"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                autoComplete="username"
+                id="email"
+                type="email"
+                placeholder="usuario@empresa.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
                 required
               />
             </div>
@@ -142,19 +143,6 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-8 p-4 bg-secondary rounded-lg border border-border">
-            <p className="text-xs text-muted-foreground font-medium mb-2 uppercase tracking-wider">Credenciales de prueba</p>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="bg-card rounded p-2 border border-border">
-                <p className="font-semibold">Admin</p>
-                <p className="text-muted-foreground">admin / admin123</p>
-              </div>
-              <div className="bg-card rounded p-2 border border-border">
-                <p className="font-semibold">Vendedor</p>
-                <p className="text-muted-foreground">vendedor / venta123</p>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>

@@ -24,8 +24,8 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Ventas',
     icon: <ShoppingCart size={18} />,
     children: [
-      { label: 'Configurador', href: '/ventas/configurador', icon: <Settings size={18} /> },
-      { label: 'Cotizaciones', href: '/ventas/cotizacion', icon: <FileText size={18} /> },
+      { label: 'Configurador', href: '/sales/configurator', icon: <Settings size={18} /> },
+      { label: 'Cotizaciones', href: '/sales/quotation', icon: <FileText size={18} /> },
     ],
   },
 ];

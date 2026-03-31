@@ -34,7 +34,7 @@ export default function CotizacionPage() {
           <h1 className="text-2xl font-bold">Cotizaciones</h1>
           <p className="text-muted-foreground mt-1">{MOCK_QUOTATIONS.length} cotizaciones en total</p>
         </div>
-        <Link href="/ventas/configurador">
+        <Link href="/sales/configurator">
           <Button>
             <Plus size={16} />
             Nueva cotización
@@ -118,7 +118,7 @@ export default function CotizacionPage() {
                       <td className="px-6 py-4 text-right font-bold">{formatCurrency(q.totalPrice)}</td>
                       <td className="px-6 py-4 text-muted-foreground hidden lg:table-cell">{formatDate(q.validUntil)}</td>
                       <td className="px-6 py-4">
-                        <Link href={`/ventas/cotizacion/${q.id}`}>
+                        <Link href={`/sales/quotation/${q.id}`}>
                           <Button variant="ghost" size="sm">Ver</Button>
                         </Link>
                       </td>

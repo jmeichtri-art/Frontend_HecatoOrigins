@@ -18,7 +18,7 @@ export default function CotizacionDetailPage({ params }: { params: Promise<{ id:
       <div className="flex flex-col items-center justify-center py-24 gap-4 animate-fade-in">
         <AlertCircle size={48} className="text-muted-foreground" />
         <h2 className="text-xl font-semibold">Cotización no encontrada</h2>
-        <Link href="/ventas/cotizacion">
+        <Link href="/sales/quotation">
           <Button variant="outline">Volver al listado</Button>
         </Link>
       </div>
@@ -28,7 +28,7 @@ export default function CotizacionDetailPage({ params }: { params: Promise<{ id:
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
       {/* Back */}
-      <Link href="/ventas/cotizacion">
+      <Link href="/sales/quotation">
         <Button variant="ghost" size="sm" className="gap-1.5">
           <ArrowLeft size={15} /> Volver
         </Button>

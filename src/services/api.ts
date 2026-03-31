@@ -1,7 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-const TOKEN = process.env.NEXT_PUBLIC_TOKEN;
+const API_BASE_URL = '';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -13,13 +12,9 @@ const api = axios.create({
 
 api.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
-    const user = localStorage.getItem('hecato_user');
-    if (user) {
-      const token = TOKEN;
-      if (token) {
-        // Enviar el token como Bearer o como esté configurado
-        config.headers['Authorization'] = token.startsWith('Bearer') ? token : `Bearer ${token}`;
-      }
+    const token = localStorage.getItem('hecato_token');
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
     }
   }
   return config;

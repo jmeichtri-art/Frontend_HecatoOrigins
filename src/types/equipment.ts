@@ -18,6 +18,7 @@ export interface Option {
   mrkwrt: string;
   description: string;
   isActive: boolean;
+  comments?: string;
 }
 
 export interface Compatibility {

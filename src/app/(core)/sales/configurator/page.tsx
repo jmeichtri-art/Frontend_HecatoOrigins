@@ -2,40 +2,48 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, ChevronRight, Forklift, Settings, ArrowRight, ArrowLeft, Search, X, Loader2, AlertCircle } from 'lucide-react';
+import { Check, ChevronRight, Forklift, Settings, Package, ArrowRight, ArrowLeft, Search, X, Loader2, AlertCircle, BookMarked } from 'lucide-react';
 import { getMachines, getMachineOptions } from '@/services/equipment.service';
-import { Machine, Option, MachineOptions } from '@/types/equipment';
+import { Machine, Option, MachineOptions, Characteristic } from '@/types/equipment';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
 
-// SAP convention: characteristic merkm '1100' holds the model variant options
+// SAP convention: merkm '1100' holds the model variant options
 const MODEL_VARIANT_KEY = '1100';
 
 const STEPS = [
-  { id: 1, label: 'Equipo',   icon: <Forklift  size={16} /> },
-  { id: 2, label: 'Opciones', icon: <Settings  size={16} /> },
-  { id: 3, label: 'Resumen',  icon: <Check     size={16} /> },
+  { id: 1, label: 'Equipo',      icon: <Forklift size={16} /> },
+  { id: 2, label: 'Obligatorio', icon: <Settings size={16} /> },
+  { id: 3, label: 'Opcionales',  icon: <Package  size={16} /> },
+  { id: 4, label: 'Resumen',     icon: <Check    size={16} /> },
 ];
+
+interface CharacteristicGroup {
+  char: Characteristic;
+  options: Option[];
+}
 
 export default function ConfiguratorPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
 
   // Step 1
-  const [machines, setMachines]           = useState<Machine[]>([]);
+  const [machines, setMachines]               = useState<Machine[]>([]);
   const [machinesLoading, setMachinesLoading] = useState(true);
-  const [machinesError, setMachinesError] = useState('');
+  const [machinesError, setMachinesError]     = useState('');
   const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null);
-  const [machineSearch, setMachineSearch] = useState('');
+  const [machineSearch, setMachineSearch]     = useState('');
 
-  // Step 2
+  // Options
   const [machineOptions, setMachineOptions] = useState<MachineOptions | null>(null);
   const [optionsLoading, setOptionsLoading] = useState(false);
   const [optionsError, setOptionsError]     = useState('');
   const [selectedOptions, setSelectedOptions] = useState<Record<number, Option>>({}); // characteristicId → Option
+  const [optionSearch, setOptionSearch] = useState('');
 
-  // Fetch machine list on mount
+  useEffect(() => { setOptionSearch(''); }, [step]);
+
   useEffect(() => {
     getMachines()
       .then(setMachines)
@@ -43,7 +51,6 @@ export default function ConfiguratorPage() {
       .finally(() => setMachinesLoading(false));
   }, []);
 
-  // Fetch options whenever the selected machine changes
   useEffect(() => {
     if (!selectedMachine) return;
     setOptionsLoading(true);
@@ -56,43 +63,75 @@ export default function ConfiguratorPage() {
       .finally(() => setOptionsLoading(false));
   }, [selectedMachine]);
 
-  // The model-variant characteristic (merkm === '1100') — may not exist for all machines
+  // The model-variant characteristic (merkm === '1100')
   const modelVariantChar = useMemo(
     () => machineOptions?.characteristics.find((c) => c.merkm === MODEL_VARIANT_KEY) ?? null,
     [machineOptions],
   );
 
-  // The currently selected model-variant option ID (drives compatibility filtering)
   const selectedModelVariantId: number | null = modelVariantChar
     ? (selectedOptions[modelVariantChar.id]?.id ?? null)
     : null;
 
-  // Characteristics ordered: model-variant first, rest in original order
-  const orderedCharacteristics = useMemo(() => {
-    if (!machineOptions) return [];
-    return [...machineOptions.characteristics].sort((a, b) => {
-      if (a.merkm === MODEL_VARIANT_KEY) return -1;
-      if (b.merkm === MODEL_VARIANT_KEY) return 1;
-      return 0;
-    });
-  }, [machineOptions]);
+  // All options for the model-variant characteristic (not filtered by compatibility)
+  const modelVariantOptions = useMemo(() => {
+    if (!modelVariantChar || !machineOptions) return [];
+    return machineOptions.options.filter(
+      (o) => Number(o.characteristicId) === Number(modelVariantChar.id),
+    );
+  }, [modelVariantChar, machineOptions]);
 
-  // Options per characteristic, filtered by compatibility when a model variant is selected
-  const visibleOptions = useMemo(() => {
-    if (!machineOptions) return {} as Record<number, Option[]>;
-    const result: Record<number, Option[]> = {};
+  // Split remaining characteristics into mandatory (level=1) and optional (level=2/3/4)
+  // level=0 → excluded; options not in the compatibility matrix → excluded
+  const characteristicData = useMemo((): { mandatory: CharacteristicGroup[]; optional: CharacteristicGroup[] } => {
+    if (!machineOptions || !selectedModelVariantId) return { mandatory: [], optional: [] };
+
+    const mandatory: CharacteristicGroup[] = [];
+    const optional:  CharacteristicGroup[] = [];
+
     for (const char of machineOptions.characteristics) {
-      const active = machineOptions.options.filter((o) => Number(o.characteristicId) === Number(char.id));
-      if (char.merkm === MODEL_VARIANT_KEY || !selectedModelVariantId) {
-        result[char.id] = active;
+      if (char.merkm === MODEL_VARIANT_KEY) continue;
+
+      const compatibleOptions = machineOptions.options
+        .filter((o) => Number(o.characteristicId) === Number(char.id))
+        .flatMap((o) => {
+          const entry = machineOptions.compatibility.find(
+            (c) => Number(c.optionId) === Number(o.id) && Number(c.modelId) === Number(selectedModelVariantId),
+          );
+          // level=0 or not present → incompatible → exclude
+          return entry && entry.level !== 0 ? [{ option: o, level: entry.level }] : [];
+        });
+
+      if (compatibleOptions.length === 0) continue;
+
+      const group: CharacteristicGroup = { char, options: compatibleOptions.map((c) => c.option) };
+
+      if (compatibleOptions.some((c) => c.level === 1)) {
+        mandatory.push(group);
       } else {
-        result[char.id] = active.filter((o) =>
-          machineOptions.compatibility.some((c) => Number(c.optionId) === Number(o.id) && Number(c.modelId) === Number(selectedModelVariantId)),
-        );
+        optional.push(group);
       }
     }
-    return result;
+
+    return { mandatory, optional };
   }, [machineOptions, selectedModelVariantId]);
+
+  // Filter characteristic groups by search query (matches char name, option description, mrkwrt or comments)
+  const filterGroups = (groups: CharacteristicGroup[]): CharacteristicGroup[] => {
+    const q = optionSearch.trim().toLowerCase();
+    if (!q) return groups;
+    return groups
+      .map((g) => ({
+        ...g,
+        options: g.options.filter(
+          (o) =>
+            o.description.toLowerCase().includes(q) ||
+            o.mrkwrt.toLowerCase().includes(q) ||
+            (o.comments?.toLowerCase().includes(q) ?? false),
+        ),
+      }))
+      .filter((g) => g.options.length > 0 || g.char.name.toLowerCase().includes(q));
+  };
 
   const filteredMachines = useMemo(() => {
     const q = machineSearch.trim().toLowerCase();
@@ -105,37 +144,78 @@ export default function ConfiguratorPage() {
     );
   }, [machines, machineSearch]);
 
-  // A characteristic is required only if it has at least one visible option
   const canNext =
-    (step === 1 && !!selectedMachine) ||
-    (step === 2 &&
-      !!machineOptions &&
-      orderedCharacteristics.every((c) => {
-        const opts = visibleOptions[c.id] ?? [];
-        return opts.length === 0 || !!selectedOptions[c.id];
-      }));
+    (step === 1 && !!selectedMachine && (modelVariantChar ? !!selectedModelVariantId : true)) ||
+    (step === 2 && characteristicData.mandatory.every((g) => !!selectedOptions[g.char.id])) ||
+    step === 3;
 
   const selectOption = (characteristicId: number, option: Option) => {
     setSelectedOptions((prev) => {
       const next = { ...prev, [characteristicId]: option };
-      // When the model-variant changes, clear selections that are no longer compatible
-      const isModelVariantChange =
-        characteristicId === modelVariantChar?.id && option.id !== prev[characteristicId]?.id;
-      if (isModelVariantChange && machineOptions) {
-        for (const char of machineOptions.characteristics) {
-          if (char.merkm === MODEL_VARIANT_KEY) continue;
-          const existing = next[char.id];
-          if (existing) {
-            const stillCompatible = machineOptions.compatibility.some(
-              (c) => Number(c.optionId) === Number(existing.id) && Number(c.modelId) === Number(option.id),
-            );
-            if (!stillCompatible) delete next[char.id];
-          }
+      // When the model variant changes, wipe all other selections (compatibility changes)
+      if (characteristicId === modelVariantChar?.id && option.id !== prev[characteristicId]?.id) {
+        for (const key of Object.keys(next)) {
+          if (Number(key) !== characteristicId) delete next[Number(key)];
         }
       }
       return next;
     });
   };
+
+  // ── Shared: renders a list of characteristic groups with their options ──
+  const renderGroups = (groups: CharacteristicGroup[]) =>
+    groups.map(({ char, options }) => (
+      <div key={char.id}>
+        <h3 className="font-medium text-sm uppercase tracking-wider text-muted-foreground mb-3">{char.name}</h3>
+        <div className="grid md:grid-cols-2 gap-3">
+          {options.map((opt) => {
+            const selected = selectedOptions[char.id]?.id === opt.id;
+            return (
+              <Card
+                key={opt.id}
+                onClick={() => selectOption(char.id, opt)}
+                className={cn(
+                  'cursor-pointer transition-all duration-150 hover:shadow-sm',
+                  selected ? 'border-primary ring-2 ring-primary/15' : 'border-border',
+                )}
+              >
+                <CardContent className="p-4 flex items-start gap-3">
+                  <div className={cn(
+                    'w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors',
+                    selected ? 'border-primary bg-primary' : 'border-border bg-background',
+                  )}>
+                    {selected && <Check size={11} className="text-white" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm">{opt.description}</p>
+                    <p className="text-xs text-muted-foreground/60 font-mono mt-0.5">{opt.mrkwrt}</p>
+                    {opt.comments && (
+                      <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{opt.comments}</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+    ));
+
+  // ── Shared: renders a summary table of characteristic → selected option ──
+  const renderSummaryRows = (groups: CharacteristicGroup[]) =>
+    groups.map(({ char }) => {
+      const opt = selectedOptions[char.id];
+      if (!opt) return null;
+      return (
+        <div key={char.id} className="flex items-start justify-between py-2 border-b border-border last:border-0 gap-4">
+          <span className="text-xs text-muted-foreground shrink-0 pt-0.5 w-40">{char.name}</span>
+          <div className="text-right">
+            <p className="font-medium text-sm">{opt.description}</p>
+            <p className="text-xs text-muted-foreground/60 font-mono">{opt.mrkwrt}</p>
+          </div>
+        </div>
+      );
+    });
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 animate-fade-in">
@@ -176,7 +256,7 @@ export default function ConfiguratorPage() {
       {/* Step content */}
       <div className="min-h-[400px]">
 
-        {/* ── Step 1: Machine selection ── */}
+        {/* ── Step 1: Machine + Model variant ── */}
         {step === 1 && (
           <div className="animate-fade-in">
             <h2 className="text-lg font-semibold mb-4">Seleccioná el equipo base</h2>
@@ -205,11 +285,9 @@ export default function ConfiguratorPage() {
                 <Loader2 size={28} className="animate-spin text-muted-foreground" />
               </div>
             )}
-
             {machinesError && (
               <div className="flex items-center gap-2 text-destructive bg-destructive/10 px-4 py-3 rounded-lg text-sm">
-                <AlertCircle size={16} />
-                {machinesError}
+                <AlertCircle size={16} /> {machinesError}
               </div>
             )}
 
@@ -257,54 +335,31 @@ export default function ConfiguratorPage() {
                 })}
               </div>
             )}
-          </div>
-        )}
 
-        {/* ── Step 2: Options ── */}
-        {step === 2 && (
-          <div className="animate-fade-in space-y-6">
-            <h2 className="text-lg font-semibold">Configurá las opciones</h2>
-
-            {optionsLoading && (
-              <div className="flex items-center justify-center py-20">
-                <Loader2 size={28} className="animate-spin text-muted-foreground" />
-              </div>
-            )}
-
-            {optionsError && (
-              <div className="flex items-center gap-2 text-destructive bg-destructive/10 px-4 py-3 rounded-lg text-sm">
-                <AlertCircle size={16} />
-                {optionsError}
-              </div>
-            )}
-
-            {!optionsLoading && !optionsError && machineOptions && orderedCharacteristics.map((char) => {
-              const opts        = visibleOptions[char.id] ?? [];
-              const isVariant   = char.merkm === MODEL_VARIANT_KEY;
-              const needsVariant = !isVariant && !selectedModelVariantId && !!modelVariantChar;
-              return (
-                <div key={char.id}>
-                  <div className="flex items-center gap-2 mb-3">
-                    <h3 className="font-medium text-sm uppercase tracking-wider text-muted-foreground">{char.name}</h3>
-                    {isVariant && (
-                      <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">Variante</span>
-                    )}
+            {/* Model variant — appears after machine is selected */}
+            {selectedMachine && (
+              <div className="mt-8">
+                {optionsLoading && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 size={16} className="animate-spin" /> Cargando modelos...
                   </div>
-
-                  {needsVariant ? (
-                    <p className="text-sm text-muted-foreground italic">
-                      Seleccioná primero la variante de modelo para ver las opciones compatibles.
-                    </p>
-                  ) : opts.length === 0 ? (
-                    <p className="text-sm text-muted-foreground italic">Sin opciones compatibles.</p>
-                  ) : (
-                    <div className="grid md:grid-cols-2 gap-3">
-                      {opts.map((opt) => {
-                        const selected = selectedOptions[char.id]?.id === opt.id;
+                )}
+                {optionsError && (
+                  <div className="flex items-center gap-2 text-destructive bg-destructive/10 px-4 py-3 rounded-lg text-sm">
+                    <AlertCircle size={16} /> {optionsError}
+                  </div>
+                )}
+                {!optionsLoading && !optionsError && modelVariantChar && (
+                  <>
+                    <h2 className="text-lg font-semibold mb-1">{modelVariantChar.name}</h2>
+                    <p className="text-sm text-muted-foreground mb-4">Seleccioná el modelo para este equipo</p>
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {modelVariantOptions.map((opt) => {
+                        const selected = selectedOptions[modelVariantChar.id]?.id === opt.id;
                         return (
                           <Card
                             key={opt.id}
-                            onClick={() => selectOption(char.id, opt)}
+                            onClick={() => selectOption(modelVariantChar.id, opt)}
                             className={cn(
                               'cursor-pointer transition-all duration-150 hover:shadow-sm',
                               selected ? 'border-primary ring-2 ring-primary/15' : 'border-border',
@@ -320,25 +375,101 @@ export default function ConfiguratorPage() {
                               <div className="flex-1 min-w-0">
                                 <p className="font-medium text-sm">{opt.description}</p>
                                 <p className="text-xs text-muted-foreground/60 font-mono mt-0.5">{opt.mrkwrt}</p>
+                                {opt.comments && (
+                                  <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{opt.comments}</p>
+                                )}
                               </div>
                             </CardContent>
                           </Card>
                         );
                       })}
                     </div>
-                  )}
-                </div>
-              );
-            })}
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
 
-        {/* ── Step 3: Summary ── */}
-        {step === 3 && selectedMachine && (
+        {/* ── Step 2: Mandatory options (level = 1) ── */}
+        {step === 2 && (
+          <div className="animate-fade-in space-y-6">
+            <div>
+              <h2 className="text-lg font-semibold">Equipamiento obligatorio</h2>
+              <p className="text-sm text-muted-foreground mt-1">Seleccioná una opción por cada categoría</p>
+            </div>
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Buscar componente u opción..."
+                value={optionSearch}
+                onChange={(e) => setOptionSearch(e.target.value)}
+                className="w-full pl-9 pr-9 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+              />
+              {optionSearch && (
+                <button
+                  onClick={() => setOptionSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            {(() => {
+              const groups = filterGroups(characteristicData.mandatory);
+              if (characteristicData.mandatory.length === 0)
+                return <p className="text-sm text-muted-foreground italic">No hay equipamiento obligatorio para este modelo.</p>;
+              if (groups.length === 0)
+                return <p className="text-sm text-muted-foreground italic">No se encontraron resultados para &quot;{optionSearch}&quot;.</p>;
+              return renderGroups(groups);
+            })()}
+          </div>
+        )}
+
+        {/* ── Step 3: Optional options (level = 2, 3, 4) ── */}
+        {step === 3 && (
+          <div className="animate-fade-in space-y-6">
+            <div>
+              <h2 className="text-lg font-semibold">Opcionales</h2>
+              <p className="text-sm text-muted-foreground mt-1">Podés seleccionar opcionales o continuar sin ninguno</p>
+            </div>
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Buscar componente u opción..."
+                value={optionSearch}
+                onChange={(e) => setOptionSearch(e.target.value)}
+                className="w-full pl-9 pr-9 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+              />
+              {optionSearch && (
+                <button
+                  onClick={() => setOptionSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            {(() => {
+              const groups = filterGroups(characteristicData.optional);
+              if (characteristicData.optional.length === 0)
+                return <p className="text-sm text-muted-foreground italic">No hay opcionales disponibles para este modelo.</p>;
+              if (groups.length === 0)
+                return <p className="text-sm text-muted-foreground italic">No se encontraron resultados para &quot;{optionSearch}&quot;.</p>;
+              return renderGroups(groups);
+            })()}
+          </div>
+        )}
+
+        {/* ── Step 4: Summary ── */}
+        {step === 4 && selectedMachine && (
           <div className="animate-fade-in">
             <h2 className="text-lg font-semibold mb-5">Resumen de configuración</h2>
             <div className="space-y-4 max-w-2xl">
 
+              {/* Machine + model variant */}
               <Card>
                 <CardContent className="p-5">
                   <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider mb-3">Equipo</h3>
@@ -349,34 +480,48 @@ export default function ConfiguratorPage() {
                     </div>
                     <span className="text-xs text-muted-foreground font-mono">#{selectedMachine.matnr}</span>
                   </div>
+                  {modelVariantChar && selectedOptions[modelVariantChar.id] && (
+                    <div className="mt-3 pt-3 border-t border-border flex items-start justify-between gap-4">
+                      <span className="text-xs text-muted-foreground pt-0.5 w-40 shrink-0">{modelVariantChar.name}</span>
+                      <div className="text-right">
+                        <p className="font-medium text-sm">{selectedOptions[modelVariantChar.id].description}</p>
+                        <p className="text-xs text-muted-foreground/60 font-mono">{selectedOptions[modelVariantChar.id].mrkwrt}</p>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardContent className="p-5">
-                  <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider mb-3">Opciones seleccionadas</h3>
-                  <div className="space-y-0">
-                    {orderedCharacteristics.map((char) => {
-                      const opt = selectedOptions[char.id];
-                      if (!opt) return null;
-                      return (
-                        <div key={char.id} className="flex items-start justify-between py-2 border-b border-border last:border-0 gap-4">
-                          <span className="text-xs text-muted-foreground shrink-0 pt-0.5 w-40">{char.name}</span>
-                          <div className="text-right">
-                            <p className="font-medium text-sm">{opt.description}</p>
-                            <p className="text-xs text-muted-foreground/60 font-mono">{opt.mrkwrt}</p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
+              {/* Mandatory */}
+              {characteristicData.mandatory.length > 0 && (
+                <Card>
+                  <CardContent className="p-5">
+                    <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider mb-3">Obligatorio</h3>
+                    <div className="space-y-0">{renderSummaryRows(characteristicData.mandatory)}</div>
+                  </CardContent>
+                </Card>
+              )}
 
-              <Button className="w-full" size="lg" onClick={() => router.push('/sales/quotation')}>
-                Generar Cotización
-                <ArrowRight size={16} />
-              </Button>
+              {/* Optional — only if at least one was chosen */}
+              {characteristicData.optional.some(({ char }) => !!selectedOptions[char.id]) && (
+                <Card>
+                  <CardContent className="p-5">
+                    <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider mb-3">Opcionales</h3>
+                    <div className="space-y-0">{renderSummaryRows(characteristicData.optional)}</div>
+                  </CardContent>
+                </Card>
+              )}
+
+              <div className="flex flex-col gap-2">
+                <Button className="w-full" size="lg" onClick={() => router.push('/sales/quotation')}>
+                  Generar Cotización
+                  <ArrowRight size={16} />
+                </Button>
+                <Button variant="outline" className="w-full" size="lg" onClick={() => {}}>
+                  <BookMarked size={16} />
+                  Guardar Template
+                </Button>
+              </div>
             </div>
           </div>
         )}
@@ -393,12 +538,12 @@ export default function ConfiguratorPage() {
           Anterior
         </Button>
 
-        {step < 3 && (
+        {step < 4 && (
           <Button
             onClick={() => setStep((s) => s + 1)}
             disabled={!canNext}
           >
-            {step === 2 ? 'Ver resumen' : 'Siguiente'}
+            {step === 3 ? 'Ver resumen' : 'Siguiente'}
             <ChevronRight size={16} />
           </Button>
         )}

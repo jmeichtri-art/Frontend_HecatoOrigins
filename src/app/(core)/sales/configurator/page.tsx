@@ -4,10 +4,12 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, ChevronRight, Forklift, Settings, Package, ArrowRight, ArrowLeft, Search, X, Loader2, AlertCircle, BookMarked } from 'lucide-react';
 import { getMachines, getMachineOptions } from '@/services/equipment.service';
+import { createTemplate } from '@/services/template.service';
 import { Machine, Option, MachineOptions, Characteristic } from '@/types/equipment';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/auth/AuthContext';
 
 // SAP convention: merkm '1100' holds the model variant options
 const MODEL_VARIANT_KEY = '1100';
@@ -26,7 +28,49 @@ interface CharacteristicGroup {
 
 export default function ConfiguratorPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [step, setStep] = useState(1);
+
+  // Template saving
+  const [templateName, setTemplateName] = useState('');
+  const [showTemplateInput, setShowTemplateInput] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [templateError, setTemplateError] = useState('');
+  const [templateSaved, setTemplateSaved] = useState(false);
+
+  const handleSaveTemplate = async () => {
+    if (!templateName.trim()) return;
+    if (!selectedMachine || !user?.company_id) {
+      setTemplateError('No se pudo determinar la compañía del usuario.');
+      return;
+    }
+    const lines = Object.entries(selectedOptions).map(([charId, opt]) => ({
+      characteristic_id: Number(charId),
+      option_id: opt.id,
+    }));
+    if (lines.length === 0) {
+      setTemplateError('El template debe tener al menos una línea.');
+      return;
+    }
+    setSavingTemplate(true);
+    setTemplateError('');
+    try {
+      await createTemplate({
+        company_id: user.company_id,
+        machine_id: selectedMachine.id,
+        name: templateName.trim(),
+        lines,
+      });
+      setTemplateSaved(true);
+      setShowTemplateInput(false);
+      setTemplateName('');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'No se pudo guardar el template.';
+      setTemplateError(msg);
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
 
   // Step 1
   const [machines, setMachines]               = useState<Machine[]>([]);
@@ -517,10 +561,51 @@ export default function ConfiguratorPage() {
                   Generar Cotización
                   <ArrowRight size={16} />
                 </Button>
-                <Button variant="outline" className="w-full" size="lg" onClick={() => {}}>
-                  <BookMarked size={16} />
-                  Guardar Template
-                </Button>
+
+                {templateSaved ? (
+                  <div className="flex items-center justify-center gap-2 py-2.5 text-sm text-green-600 bg-green-500/10 rounded-lg border border-green-500/20">
+                    <Check size={15} />
+                    Template guardado exitosamente
+                  </div>
+                ) : showTemplateInput ? (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Nombre del template..."
+                        value={templateName}
+                        onChange={(e) => { setTemplateName(e.target.value); setTemplateError(''); }}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSaveTemplate()}
+                        autoFocus
+                        className="flex-1 px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                      />
+                      <Button
+                        size="lg"
+                        onClick={handleSaveTemplate}
+                        disabled={!templateName.trim() || savingTemplate}
+                      >
+                        {savingTemplate ? <Loader2 size={16} className="animate-spin" /> : 'Guardar'}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="lg"
+                        onClick={() => { setShowTemplateInput(false); setTemplateName(''); setTemplateError(''); }}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                    {templateError && (
+                      <p className="flex items-center gap-1.5 text-xs text-destructive">
+                        <AlertCircle size={13} /> {templateError}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <Button variant="outline" className="w-full" size="lg" onClick={() => setShowTemplateInput(true)}>
+                    <BookMarked size={16} />
+                    Guardar Template
+                  </Button>
+                )}
               </div>
             </div>
           </div>

@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, ShoppingCart, Settings, FileText,
-  ChevronLeft, ChevronRight, LogOut, Truck, ChevronDown, ChevronUp,
+  ChevronLeft, ChevronRight, LogOut, Truck, ChevronDown, ChevronUp, BookMarked,
+  Cog, Users, Building2,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { cn } from '@/lib/utils';
@@ -26,6 +27,15 @@ const NAV_ITEMS: NavItem[] = [
     children: [
       { label: 'Configurador', href: '/sales/configurator', icon: <Settings size={18} /> },
       { label: 'Cotizaciones', href: '/sales/quotation', icon: <FileText size={18} /> },
+      { label: 'Templates', href: '/sales/templates', icon: <BookMarked size={18} /> },
+    ],
+  },
+  {
+    label: 'Configuración',
+    icon: <Cog size={18} />,
+    children: [
+      { label: 'Usuarios',   href: '/config/users',     icon: <Users size={18} />    },
+      { label: 'Compañías',  href: '/config/companies', icon: <Building2 size={18} /> },
     ],
   },
 ];

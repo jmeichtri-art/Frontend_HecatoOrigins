@@ -8,6 +8,7 @@ export interface User {
   name: string;
   email: string;
   role: string;
+  company_id: number;
 }
 
 interface AuthContextType {
@@ -44,7 +45,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Derive a display name from the email (part before @)
       const name = apiUser.email.split('@')[0];
-      const user: User = { id: apiUser.id, name, email: apiUser.email, role: apiUser.role };
+      const user: User = {
+        id: apiUser.id,
+        name,
+        email: apiUser.email,
+        role: apiUser.role,
+        company_id: apiUser.company_id ?? 1,
+      };
 
       localStorage.setItem('hecato_token', token);
       localStorage.setItem('hecato_user', JSON.stringify(user));

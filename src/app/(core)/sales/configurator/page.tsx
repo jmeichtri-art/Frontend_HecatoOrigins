@@ -6,6 +6,9 @@ import { Check, ChevronRight, Forklift, Settings, Package, ArrowRight, ArrowLeft
 import { getMachines, getMachineOptions } from '@/services/equipment.service';
 import { createTemplate } from '@/services/template.service';
 import { Machine, Option, MachineOptions, Characteristic } from '@/types/equipment';
+import { QuotationDraft } from '@/types/quotation';
+import { useCompany } from '@/lib/company/CompanyContext';
+import { CompanySelector } from '@/components/ui/CompanySelector';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
@@ -70,6 +73,51 @@ export default function ConfiguratorPage() {
     } finally {
       setSavingTemplate(false);
     }
+  };
+
+  const { selectedCompany } = useCompany();
+
+  const handleGenerateQuotation = () => {
+    if (!selectedMachine || !selectedCompany) return;
+
+    const lines: QuotationDraft['lines'] = [];
+
+    if (modelVariantChar && selectedOptions[modelVariantChar.id]) {
+      const opt = selectedOptions[modelVariantChar.id];
+      lines.push({
+        characteristic_id: modelVariantChar.id,
+        characteristic_name: modelVariantChar.name,
+        merkm: modelVariantChar.merkm,
+        option_id: opt.id,
+        option_description: opt.description,
+        mrkwrt: opt.mrkwrt,
+      });
+    }
+
+    for (const group of [...characteristicData.mandatory, ...characteristicData.optional]) {
+      const opt = selectedOptions[group.char.id];
+      if (!opt) continue;
+      lines.push({
+        characteristic_id: group.char.id,
+        characteristic_name: group.char.name,
+        merkm: group.char.merkm,
+        option_id: opt.id,
+        option_description: opt.description,
+        mrkwrt: opt.mrkwrt,
+      });
+    }
+
+    const draft: QuotationDraft = {
+      company_id: selectedCompany.id,
+      company_name: selectedCompany.name,
+      machine_id: selectedMachine.id,
+      machine_matnrk: selectedMachine.matnrk,
+      machine_description: selectedMachine.description,
+      lines,
+    };
+
+    sessionStorage.setItem('hecato_quotation_draft', JSON.stringify(draft));
+    router.push('/sales/quotation/new');
   };
 
   // Step 1
@@ -556,8 +604,22 @@ export default function ConfiguratorPage() {
                 </Card>
               )}
 
+              <Card>
+                <CardContent className="p-5">
+                  <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider mb-3">Compañía</h3>
+                  <CompanySelector
+                    description="Seleccioná la compañía para la que se generará la cotización. Los clientes se cargarán desde SAP B1 según esta selección."
+                  />
+                </CardContent>
+              </Card>
+
               <div className="flex flex-col gap-2">
-                <Button className="w-full" size="lg" onClick={() => router.push('/sales/quotation')}>
+                <Button
+                  className="w-full"
+                  size="lg"
+                  disabled={!selectedCompany}
+                  onClick={handleGenerateQuotation}
+                >
                   Generar Cotización
                   <ArrowRight size={16} />
                 </Button>

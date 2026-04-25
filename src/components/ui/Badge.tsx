@@ -56,3 +56,17 @@ export const STATUS_LABEL_MAP: Record<string, string> = {
   rechazada: 'Rechazada',
   vencida: 'Vencida',
 };
+
+export const QUOTATION_STATUS_VARIANT_MAP: Record<string, VariantProps<typeof badgeVariants>['variant']> = {
+  draft: 'default',
+  sent: 'info',
+  approved: 'success',
+  rejected: 'destructive',
+};
+
+export const QUOTATION_STATUS_LABEL_MAP: Record<string, string> = {
+  draft: 'Borrador',
+  sent: 'Enviada',
+  approved: 'Aprobada',
+  rejected: 'Rechazada',
+};

@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, ShoppingCart, Settings, FileText,
   ChevronLeft, ChevronRight, LogOut, Truck, ChevronDown, ChevronUp, BookMarked,
-  Cog, Users, Building2,
+  Cog, Users, Building2, Tag, Package, FileUp,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { cn } from '@/lib/utils';
@@ -28,6 +28,14 @@ const NAV_ITEMS: NavItem[] = [
       { label: 'Configurador', href: '/sales/configurator', icon: <Settings size={18} /> },
       { label: 'Cotizaciones', href: '/sales/quotation', icon: <FileText size={18} /> },
       { label: 'Templates', href: '/sales/templates', icon: <BookMarked size={18} /> },
+      { label: 'Listas de Precios', href: '/sales/price-list', icon: <Tag size={18} /> },
+    ],
+  },
+  {
+    label: 'Inventario',
+    icon: <Package size={18} />,
+    children: [
+      { label: 'Importar Equipos', href: '/inventory/import', icon: <FileUp size={18} /> },
     ],
   },
   {

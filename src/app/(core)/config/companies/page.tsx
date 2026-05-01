@@ -178,7 +178,9 @@ export default function CompaniesPage() {
                   ? `Editar compañía — ${(mode as { type: 'edit'; company: Company }).company.name}`
                   : 'Nueva compañía'}
               </h2>
-              <button onClick={closeForm} className="text-muted-foreground hover:text-foreground transition-colors">
+              <button 
+              aria-label="label for the select"
+              onClick={closeForm} className="text-muted-foreground hover:text-foreground transition-colors">
                 <X size={18} />
               </button>
             </div>
@@ -249,6 +251,7 @@ export default function CompaniesPage() {
                   {isEditing && <span className="text-muted-foreground/60 normal-case font-normal ml-1">(vacío = sin cambio)</span>}
                 </label>
                 <select
+                  aria-label="label for the select"
                   value={form.type}
                   onChange={(e) => setField('type', e.target.value)}
                   className="px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"

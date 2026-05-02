@@ -10,6 +10,7 @@ interface CompanyContextType {
   error: string;
   selectedCompany: Company | null;
   setSelectedCompany: (company: Company | null) => void;
+  refreshCompanies: () => Promise<void>;
 }
 
 const CompanyContext = createContext<CompanyContextType | undefined>(undefined);
@@ -27,8 +28,15 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setIsLoading(false));
   }, []);
 
+  async function refreshCompanies() {
+    try {
+      const data = await getCompanies();
+      setCompanies(data.filter((c) => c.active));
+    } catch { /* silent — selector keeps showing current list */ }
+  }
+
   return (
-    <CompanyContext.Provider value={{ companies, isLoading, error, selectedCompany, setSelectedCompany }}>
+    <CompanyContext.Provider value={{ companies, isLoading, error, selectedCompany, setSelectedCompany, refreshCompanies }}>
       {children}
     </CompanyContext.Provider>
   );

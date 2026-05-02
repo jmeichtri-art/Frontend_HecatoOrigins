@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Truck, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Forklift, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -45,7 +45,7 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="flex items-center gap-3 relative z-10">
           <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
-            <Truck size={20} className="text-white" />
+            <Forklift size={20} className="text-white" />
           </div>
           <div>
             <div className="text-white font-extrabold text-xl tracking-[0.1em]">HECATO</div>
@@ -86,7 +86,7 @@ export default function LoginPage() {
           {/* Mobile logo */}
           <div className="flex items-center gap-3 mb-10 lg:hidden">
             <div className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center">
-              <Truck size={18} className="text-white" />
+              <Forklift size={18} className="text-white" />
             </div>
             <span className="font-extrabold text-xl tracking-widest">HECATO</span>
           </div>

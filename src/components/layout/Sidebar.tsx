@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, ShoppingCart, Settings, FileText,
-  ChevronLeft, ChevronRight, LogOut, Truck, ChevronDown, ChevronUp, BookMarked,
-  Cog, Users, Building2, Tag, Package, FileUp,
+  ChevronLeft, ChevronRight, LogOut, Forklift, ChevronDown, ChevronUp, BookMarked,
+  Cog, Users, Building2, Tag, Package, FileUp, Boxes,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { cn } from '@/lib/utils';
@@ -35,6 +35,7 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Inventario',
     icon: <Package size={18} />,
     children: [
+      { label: 'Ítems',            href: '/inventory/items',  icon: <Boxes size={18} />  },
       { label: 'Importar Equipos', href: '/inventory/import', icon: <FileUp size={18} /> },
     ],
   },
@@ -126,7 +127,7 @@ export function Sidebar() {
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-5 border-b border-white/8">
         <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center shrink-0">
-          <Truck size={18} className="text-white" />
+          <Forklift size={18} className="text-white" />
         </div>
         {!collapsed && (
           <div className="flex flex-col leading-tight">

@@ -30,6 +30,7 @@ export function CompanySelector({ label = 'Compañía', description, className }
           </div>
         )}
         <select
+          title= "companies"
           value={selectedCompany?.id ?? ''}
           onChange={(e) => {
             const found = companies.find((c) => c.id === Number(e.target.value));

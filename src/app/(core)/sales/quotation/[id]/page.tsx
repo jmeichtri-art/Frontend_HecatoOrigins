@@ -2,19 +2,21 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, User, Calendar, Truck, AlertCircle, Loader2, FileText } from 'lucide-react';
+import { ArrowLeft, User, Calendar, Forklift, AlertCircle, Loader2, FileText, Pencil } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge, QUOTATION_STATUS_VARIANT_MAP, QUOTATION_STATUS_LABEL_MAP } from '@/components/ui/Badge';
 import { formatDate } from '@/lib/utils';
 import { getQuotationById } from '@/services/quotation.service';
 import { QuotationApiItem } from '@/types/quotation';
+import { QuotationForm } from '@/components/quotation/QuotationForm';
 
 export default function CotizacionDetailPage({ params }: { params: { id: string } }) {
   const { id } = params;
   const [quotation, setQuotation] = useState<QuotationApiItem | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [loading,   setLoading]   = useState(true);
+  const [error,     setError]     = useState('');
+  const [editMode,  setEditMode]  = useState(false);
 
   useEffect(() => {
     const numId = Number(id);
@@ -45,9 +47,19 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
     );
   }
 
+  if (editMode) {
+    return (
+      <QuotationForm
+        mode="edit"
+        quotation={quotation}
+        onSaved={(updated) => { setQuotation(updated); setEditMode(false); }}
+        onCancel={() => setEditMode(false)}
+      />
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
-      {/* Back */}
       <Link href="/sales/quotation">
         <Button variant="ghost" size="sm" className="gap-1.5">
           <ArrowLeft size={15} /> Volver
@@ -81,7 +93,7 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
       </Card>
 
       <div className="grid md:grid-cols-2 gap-6">
-        {/* Client */}
+        {/* Socio de Negocio */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -89,15 +101,15 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-0 pt-0">
-            <InfoRow label="Nombre" value={quotation.cardname} />
-            <InfoRow label="CardCode" value={quotation.cardcode} mono />
+            <InfoRow label="Nombre"    value={quotation.cardname} />
+            <InfoRow label="CardCode"  value={quotation.cardcode} mono />
             {quotation.customer_reference && (
               <InfoRow label="Referencia" value={quotation.customer_reference} />
             )}
           </CardContent>
         </Card>
 
-        {/* Dates */}
+        {/* Fechas */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -105,30 +117,39 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-0 pt-0">
-            <InfoRow label="Creación" value={formatDate(quotation.created_at)} />
+            <InfoRow label="Creación"      value={formatDate(quotation.created_at)} />
             <InfoRow label="Actualización" value={formatDate(quotation.updated_at)} />
-            <InfoRow label="Válida hasta" value={formatDate(quotation.valid_until)} />
+            <InfoRow label="Válida hasta"  value={formatDate(quotation.valid_until)} />
           </CardContent>
         </Card>
 
-        {/* Machine + lines */}
+        {/* Configuración del equipo */}
         <Card className="md:col-span-2">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Truck size={16} className="text-primary" /> Configuración del equipo
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Forklift size={16} className="text-primary" /> Configuración del equipo
+              </CardTitle>
+              <button
+                type="button"
+                onClick={() => setEditMode(true)}
+                title="Editar cotización"
+                className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+              >
+                <Pencil size={15} />
+              </button>
+            </div>
           </CardHeader>
           <CardContent className="pt-0">
             <div className="flex items-center gap-4 p-4 bg-secondary/50 rounded-lg mb-4">
               <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center shrink-0">
-                <Truck size={22} className="text-primary" />
+                <Forklift size={22} className="text-primary" />
               </div>
               <div>
                 <p className="font-bold">{quotation.matnrk}</p>
                 <p className="text-sm text-muted-foreground">{quotation.machine_description}</p>
               </div>
             </div>
-
             {quotation.lines && quotation.lines.length > 0 && (
               <div className="space-y-0">
                 {quotation.lines.map((line) => (
@@ -153,7 +174,7 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
           </CardContent>
         </Card>
 
-        {/* Notes */}
+        {/* Notas */}
         {quotation.notes && (
           <Card className="md:col-span-2">
             <CardHeader>
@@ -168,7 +189,6 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
         )}
       </div>
 
-      {/* Actions */}
       <div className="flex gap-3 justify-end pb-6">
         <Button variant="secondary">Exportar PDF</Button>
         <Button variant="outline">Duplicar</Button>

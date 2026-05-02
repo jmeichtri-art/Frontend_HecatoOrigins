@@ -21,6 +21,7 @@ export interface QuotationDraftLine {
   option_id: number;
   option_description: string;
   mrkwrt: string;
+  required?: boolean;
 }
 
 export interface QuotationDraft {
@@ -31,6 +32,22 @@ export interface QuotationDraft {
   machine_description: string;
   template_id?: number;
   lines: QuotationDraftLine[];
+}
+
+export interface UpdateQuotationLinesPayload {
+  lines: {
+    characteristic_id: number;
+    option_id: number;
+    unit_price?: number;
+    quantity?: number;
+    discount_line?: number;
+    discount_amount?: number;
+    line_total?: number;
+  }[];
+  subtotal?: number;
+  discount_pct?: number;
+  discount_amount?: number;
+  total?: number;
 }
 
 export interface CreateQuotationPayload {
@@ -47,7 +64,15 @@ export interface CreateQuotationPayload {
     option_id: number;
     unit_price?: number;
     currency_id?: number;
+    quantity?: number;
+    discount_line?: number;
+    discount_amount?: number;
+    line_total?: number;
   }[];
+  subtotal?: number;
+  discount_pct?: number;
+  discount_amount?: number;
+  total?: number;
 }
 
 export interface QuotationApiLine {

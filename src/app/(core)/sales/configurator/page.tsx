@@ -91,10 +91,11 @@ export default function ConfiguratorPage() {
         option_id: opt.id,
         option_description: opt.description,
         mrkwrt: opt.mrkwrt,
+        required: true,
       });
     }
 
-    for (const group of [...characteristicData.mandatory, ...characteristicData.optional]) {
+    for (const group of characteristicData.mandatory) {
       const opt = selectedOptions[group.char.id];
       if (!opt) continue;
       lines.push({
@@ -104,6 +105,21 @@ export default function ConfiguratorPage() {
         option_id: opt.id,
         option_description: opt.description,
         mrkwrt: opt.mrkwrt,
+        required: true,
+      });
+    }
+
+    for (const group of characteristicData.optional) {
+      const opt = selectedOptions[group.char.id];
+      if (!opt) continue;
+      lines.push({
+        characteristic_id: group.char.id,
+        characteristic_name: group.char.name,
+        merkm: group.char.merkm,
+        option_id: opt.id,
+        option_description: opt.description,
+        mrkwrt: opt.mrkwrt,
+        required: false,
       });
     }
 

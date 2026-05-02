@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { formatDate } from '@/lib/utils';
+import { useCompany } from '@/lib/company/CompanyContext';
 
 interface CompanyFormState {
   name: string;
@@ -30,6 +31,7 @@ const EMPTY_FORM: CompanyFormState = {
 type FormMode = { type: 'create' } | { type: 'edit'; company: Company };
 
 export default function CompaniesPage() {
+  const { refreshCompanies } = useCompany();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState('');
@@ -108,6 +110,7 @@ export default function CompaniesPage() {
         const created = await createCompany(payload);
         setCompanies((c) => [...c, created]);
         closeForm();
+        refreshCompanies();
       } catch (err: unknown) {
         setFormError(err instanceof Error ? err.message : 'No se pudo crear la compañía.');
       } finally {
@@ -129,6 +132,7 @@ export default function CompaniesPage() {
         const updated = await updateCompany(mode.company.id, payload);
         setCompanies((c) => c.map((x) => (x.id === updated.id ? updated : x)));
         closeForm();
+        refreshCompanies();
       } catch (err: unknown) {
         setFormError(err instanceof Error ? err.message : 'No se pudo actualizar la compañía.');
       } finally {
@@ -143,6 +147,7 @@ export default function CompaniesPage() {
       await deleteCompany(id);
       setCompanies((c) => c.filter((x) => x.id !== id));
       setConfirmDelete(null);
+      refreshCompanies();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'No se pudo eliminar la compañía.');
     } finally {

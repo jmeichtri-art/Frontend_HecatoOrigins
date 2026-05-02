@@ -1,5 +1,5 @@
 import api from './api';
-import { PriceList, CreatePriceListPayload, PriceListOptionPrice } from '@/types/price-list';
+import { PriceList, CreatePriceListPayload, UpdatePriceListPayload, PriceListOptionPrice } from '@/types/price-list';
 
 export async function getPriceLists(): Promise<PriceList[]> {
   const response = await api.get('/api/v1/price-lists');
@@ -8,6 +8,11 @@ export async function getPriceLists(): Promise<PriceList[]> {
 
 export async function createPriceList(payload: CreatePriceListPayload): Promise<PriceList> {
   const response = await api.post('/api/v1/price-lists', payload);
+  return response.data.data;
+}
+
+export async function updatePriceList(id: number, payload: UpdatePriceListPayload): Promise<PriceList> {
+  const response = await api.post(`/api/v1/price-lists/${id}`, payload);
   return response.data.data;
 }
 

@@ -152,23 +152,41 @@ export default function CotizacionDetailPage({ params }: { params: { id: string 
             </div>
             {quotation.lines && quotation.lines.length > 0 && (
               <div className="space-y-0">
-                {quotation.lines.map((line) => (
-                  <div
-                    key={line.characteristic_id}
-                    className="flex items-start justify-between py-2.5 border-b border-border last:border-0 gap-4"
-                  >
-                    <span className="text-xs text-muted-foreground shrink-0 pt-0.5 w-44">{line.characteristic_name}</span>
-                    <div className="flex-1 text-right">
-                      <p className="text-sm font-medium">{line.option_description}</p>
-                      <p className="text-xs text-muted-foreground/60 font-mono">{line.mrkwrt}</p>
+                {quotation.lines.map((line, idx) =>
+                  (line.line_type ?? 'machine') === 'machine' ? (
+                    <div
+                      key={`m-${line.characteristic_id ?? idx}`}
+                      className="flex items-start justify-between py-2.5 border-b border-border last:border-0 gap-4"
+                    >
+                      <span className="text-xs text-muted-foreground shrink-0 pt-0.5 w-44">{line.characteristic_name}</span>
+                      <div className="flex-1 text-right">
+                        <p className="text-sm font-medium">{line.option_description}</p>
+                        <p className="text-xs text-muted-foreground/60 font-mono">{line.mrkwrt}</p>
+                      </div>
+                      {line.unit_price != null && (
+                        <p className="text-sm font-semibold shrink-0 text-right">
+                          {line.currency_symbol} {line.unit_price.toLocaleString('es-AR')}
+                        </p>
+                      )}
                     </div>
-                    {line.unit_price != null && (
-                      <p className="text-sm font-semibold shrink-0 text-right">
-                        {line.currency_symbol} {line.unit_price.toLocaleString('es-AR')}
-                      </p>
-                    )}
-                  </div>
-                ))}
+                  ) : (
+                    <div
+                      key={`i-${line.item_id ?? idx}`}
+                      className="flex items-start justify-between py-2.5 border-b border-border last:border-0 gap-4"
+                    >
+                      <span className="text-xs font-mono text-muted-foreground shrink-0 pt-0.5 w-44">{line.item_code}</span>
+                      <div className="flex-1 text-right">
+                        <p className="text-sm font-medium">{line.item_name}</p>
+                        <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wide">Ítem adicional</p>
+                      </div>
+                      {line.unit_price != null && (
+                        <p className="text-sm font-semibold shrink-0 text-right">
+                          {line.unit_price.toLocaleString('es-AR')}
+                        </p>
+                      )}
+                    </div>
+                  )
+                )}
               </div>
             )}
           </CardContent>

@@ -43,3 +43,19 @@ export interface CreatePriceListPayload {
   company_ids?: number[];
   items?: CreatePriceListItemPayload[];
 }
+
+export interface UpdatePriceListItemPayload {
+  characteristic_option_id?: number;
+  article_id?: number;
+  unit_price: number;
+  currency_id: number;
+}
+
+export interface UpdatePriceListPayload {
+  list_number: string;
+  name: string;
+  valid_from: string;
+  valid_until?: string;
+  company_ids?: number[];
+  items?: UpdatePriceListItemPayload[];
+}

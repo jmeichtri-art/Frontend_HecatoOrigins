@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { AlertCircle, Loader2, Plus, Trash2, X, Check, Tag, PlusCircle } from 'lucide-react';
-import { createPriceList, getPriceLists, deletePriceList } from '@/services/price-list.service';
+import { AlertCircle, Loader2, Plus, Trash2, X, Check, Tag, PlusCircle, Pencil } from 'lucide-react';
+import { createPriceList, getPriceLists, deletePriceList, updatePriceList } from '@/services/price-list.service';
 import { getMachines } from '@/services/equipment.service';
-import { PriceList, CreatePriceListPayload } from '@/types/price-list';
+import { PriceList, CreatePriceListPayload, UpdatePriceListPayload } from '@/types/price-list';
 import { Machine } from '@/types/equipment';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -57,6 +57,8 @@ export default function PriceListPage() {
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const [editingId, setEditingId] = useState<number | null>(null);
+
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -75,6 +77,28 @@ export default function PriceListPage() {
     setSelectedCompanyIds(new Set());
     setItems([]);
     setFormError('');
+    setEditingId(null);
+    setShowForm(true);
+    setConfirmDelete(null);
+  }
+
+  function openEdit(pl: PriceList) {
+    setBasic({
+      list_number: pl.list_number,
+      name: pl.name,
+      valid_from: pl.valid_from,
+      valid_until: pl.valid_until ?? '',
+    });
+    setSelectedCompanyIds(new Set((pl.companies ?? []).map((c) => c.id)));
+    setItems((pl.items ?? []).map((item) => ({
+      itemType: item.article_id !== null ? 'article' : 'machine',
+      machine_id: item.machine_id !== null ? String(item.machine_id) : '',
+      article_id: item.article_id !== null ? String(item.article_id) : '',
+      unit_price: String(item.unit_price),
+      currency_id: String(item.currency_id),
+    })));
+    setFormError('');
+    setEditingId(pl.id);
     setShowForm(true);
     setConfirmDelete(null);
   }
@@ -82,6 +106,7 @@ export default function PriceListPage() {
   function closeForm() {
     setShowForm(false);
     setFormError('');
+    setEditingId(null);
   }
 
   function setField<K extends keyof BasicForm>(key: K, value: string) {
@@ -133,27 +158,46 @@ export default function PriceListPage() {
 
     setSubmitting(true);
     try {
-      const payload: CreatePriceListPayload = {
-        list_number: basic.list_number.trim(),
-        name: basic.name.trim(),
-        valid_from: basic.valid_from,
-        ...(basic.valid_until && { valid_until: basic.valid_until }),
-        ...(selectedCompanyIds.size > 0 && { company_ids: Array.from(selectedCompanyIds) }),
-        ...(items.length > 0 && {
+      if (editingId !== null) {
+        const payload: UpdatePriceListPayload = {
+          list_number: basic.list_number.trim(),
+          name: basic.name.trim(),
+          valid_from: basic.valid_from,
+          ...(basic.valid_until && { valid_until: basic.valid_until }),
+          company_ids: Array.from(selectedCompanyIds),
           items: items.map((row) => ({
             ...(row.itemType === 'machine'
-              ? { machine_id: Number(row.machine_id) }
+              ? { characteristic_option_id: Number(row.machine_id) }
               : { article_id: Number(row.article_id) }),
             unit_price: Number(row.unit_price),
             currency_id: Number(row.currency_id),
           })),
-        }),
-      };
-      const created = await createPriceList(payload);
-      setPriceLists((p) => [created, ...p]);
+        };
+        const updated = await updatePriceList(editingId, payload);
+        setPriceLists((p) => p.map((x) => x.id === editingId ? updated : x));
+      } else {
+        const payload: CreatePriceListPayload = {
+          list_number: basic.list_number.trim(),
+          name: basic.name.trim(),
+          valid_from: basic.valid_from,
+          ...(basic.valid_until && { valid_until: basic.valid_until }),
+          ...(selectedCompanyIds.size > 0 && { company_ids: Array.from(selectedCompanyIds) }),
+          ...(items.length > 0 && {
+            items: items.map((row) => ({
+              ...(row.itemType === 'machine'
+                ? { machine_id: Number(row.machine_id) }
+                : { article_id: Number(row.article_id) }),
+              unit_price: Number(row.unit_price),
+              currency_id: Number(row.currency_id),
+            })),
+          }),
+        };
+        const created = await createPriceList(payload);
+        setPriceLists((p) => [created, ...p]);
+      }
       closeForm();
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : 'No se pudo crear la lista de precios.');
+      setFormError(err instanceof Error ? err.message : editingId !== null ? 'No se pudo actualizar la lista de precios.' : 'No se pudo crear la lista de precios.');
     } finally {
       setSubmitting(false);
     }
@@ -193,7 +237,9 @@ export default function PriceListPage() {
         <Card className="border-primary/30 shadow-sm">
           <CardContent className="p-6 space-y-6">
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-base">Nueva lista de precios</h2>
+              <h2 className="font-semibold text-base">
+                {editingId !== null ? 'Editar lista de precios' : 'Nueva lista de precios'}
+              </h2>
               <button onClick={closeForm} title="Cerrar" className="text-muted-foreground hover:text-foreground transition-colors">
                 <X size={18} />
               </button>
@@ -389,7 +435,7 @@ export default function PriceListPage() {
                 Cancelar
               </Button>
               <Button onClick={handleSubmit} loading={submitting}>
-                Crear lista
+                {editingId !== null ? 'Guardar cambios' : 'Crear lista'}
               </Button>
             </div>
           </CardContent>
@@ -461,6 +507,16 @@ export default function PriceListPage() {
                         </td>
                         <td className="px-5 py-3.5">
                           <div className="flex items-center justify-end gap-1">
+                            {!isConfirming && (
+                              <button
+                                type="button"
+                                onClick={() => openEdit(pl)}
+                                className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                                title="Editar"
+                              >
+                                <Pencil size={14} />
+                              </button>
+                            )}
                             {isConfirming ? (
                               <>
                                 <span className="text-xs text-muted-foreground mr-1">¿Eliminar?</span>

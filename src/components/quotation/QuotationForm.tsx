@@ -1,20 +1,21 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ArrowLeft, AlertCircle, Loader2, Check, Building2, Tag, Banknote, User, Calendar } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Loader2, Check, Building2, Tag, Banknote, User, Calendar, Plus, X, Boxes } from 'lucide-react';
 import Link from 'next/link';
-import { QuotationDraft, QuotationApiItem } from '@/types/quotation';
+import { QuotationDraft, QuotationApiItem, QuotationLinePayload } from '@/types/quotation';
 import { PriceList, PriceListOptionPrice } from '@/types/price-list';
+import { Item } from '@/types/item';
 import { SapCustomer } from '@/services/sap.service';
 import { createQuotation, updateQuotationLines } from '@/services/quotation.service';
 import { getPriceLists, getPriceListPrices } from '@/services/price-list.service';
+import { getItems } from '@/services/item.service';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
 import { SapCustomerCombobox } from '@/components/ui/SapCustomerCombobox';
 
-// Línea unificada para el formulario (subconjunto común de DraftLine y ApiLine)
 interface FormLine {
   characteristic_id: number;
   characteristic_name: string;
@@ -24,28 +25,28 @@ interface FormLine {
   required?: boolean;
 }
 
+interface ItemFormLine {
+  item_id: number;
+  item_code: string;
+  item_name: string;
+  quantity: number;
+  unit_price: number | null;
+  discount: number;
+}
+
 interface LineDiscount { discount: number; }
 
 type QuotationFormProps =
-  | {
-      mode: 'create';
-      draft: QuotationDraft;
-      onSuccess: (id: number) => void;
-    }
-  | {
-      mode: 'edit';
-      quotation: QuotationApiItem;
-      onSaved: (updated: QuotationApiItem) => void;
-      onCancel: () => void;
-    };
+  | { mode: 'create'; draft: QuotationDraft; onSuccess: (id: number) => void }
+  | { mode: 'edit'; quotation: QuotationApiItem; onSaved: (updated: QuotationApiItem) => void; onCancel: () => void };
 
 function buildInitialPrices(quotation: QuotationApiItem): Map<number, PriceListOptionPrice> {
   return new Map(
     (quotation.lines ?? [])
-      .filter((l) => l.unit_price != null)
-      .map((l) => [l.option_id, {
-        characteristic_option_id: l.option_id,
-        unit_price: l.unit_price!,
+      .filter((l) => (l.line_type ?? 'machine') === 'machine' && l.option_id != null && l.unit_price != null)
+      .map((l) => [l.option_id!, {
+        characteristic_option_id: l.option_id!,
+        unit_price:      l.unit_price!,
         currency_code:   l.currency_code   ?? undefined,
         currency_symbol: l.currency_symbol ?? undefined,
       }])
@@ -54,18 +55,19 @@ function buildInitialPrices(quotation: QuotationApiItem): Map<number, PriceListO
 
 export function QuotationForm(props: QuotationFormProps) {
   const isCreate = props.mode === 'create';
-
   const companyId = isCreate ? props.draft.company_id : props.quotation.company_id;
 
   const lines = useMemo<FormLine[]>(() => {
     if (isCreate) return props.draft.lines;
-    return (props.quotation.lines ?? []).map((l) => ({
-      characteristic_id:   l.characteristic_id,
-      characteristic_name: l.characteristic_name,
-      option_id:           l.option_id,
-      option_description:  l.option_description,
-      mrkwrt:              l.mrkwrt,
-    }));
+    return (props.quotation.lines ?? [])
+      .filter((l) => (l.line_type ?? 'machine') === 'machine')
+      .map((l) => ({
+        characteristic_id:   l.characteristic_id!,
+        characteristic_name: l.characteristic_name ?? '',
+        option_id:           l.option_id!,
+        option_description:  l.option_description ?? '',
+        mrkwrt:              l.mrkwrt ?? '',
+      }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -74,22 +76,39 @@ export function QuotationForm(props: QuotationFormProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   []);
 
-  const [customer,           setCustomer]           = useState<SapCustomer | null>(null);
-  const [validUntil,         setValidUntil]         = useState(!isCreate ? (props.quotation as QuotationApiItem).valid_until.slice(0, 10) : '');
-  const [customerReference,  setCustomerReference]  = useState(!isCreate ? ((props.quotation as QuotationApiItem).customer_reference ?? '') : '');
-  const [notes,              setNotes]              = useState(!isCreate ? ((props.quotation as QuotationApiItem).notes ?? '') : '');
+  const [customer,          setCustomer]          = useState<SapCustomer | null>(null);
+  const [validUntil,        setValidUntil]        = useState(!isCreate ? (props.quotation as QuotationApiItem).valid_until.slice(0, 10) : '');
+  const [customerReference, setCustomerReference] = useState(!isCreate ? ((props.quotation as QuotationApiItem).customer_reference ?? '') : '');
+  const [notes,             setNotes]             = useState(!isCreate ? ((props.quotation as QuotationApiItem).notes ?? '') : '');
 
-  const [priceLists,         setPriceLists]         = useState<PriceList[]>([]);
+  const [priceLists,          setPriceLists]          = useState<PriceList[]>([]);
   const [selectedPriceListId, setSelectedPriceListId] = useState('');
-  const [prices,             setPrices]             = useState<Map<number, PriceListOptionPrice>>(initialPrices);
-  const [fetchingPrices,     setFetchingPrices]     = useState(false);
-  const [lineExtras,         setLineExtras]         = useState<LineDiscount[]>(lines.map(() => ({ discount: 0 })));
-  const [orderDiscountPct,   setOrderDiscountPct]   = useState(0);
+  const [prices,              setPrices]              = useState<Map<number, PriceListOptionPrice>>(initialPrices);
+  const [fetchingPrices,      setFetchingPrices]      = useState(false);
+  const [lineExtras,          setLineExtras]          = useState<LineDiscount[]>(lines.map(() => ({ discount: 0 })));
+  const [orderDiscountPct,    setOrderDiscountPct]    = useState(0);
+
+  const [itemLines,       setItemLines]       = useState<ItemFormLine[]>(() => {
+    if (isCreate) return [];
+    return (props.quotation as QuotationApiItem).lines
+      ?.filter((l) => l.line_type === 'item')
+      .map((l) => ({
+        item_id:    l.item_id!,
+        item_code:  l.item_code ?? '',
+        item_name:  l.item_name ?? '',
+        quantity:   1,
+        unit_price: l.unit_price,
+        discount:   0,
+      })) ?? [];
+  });
+  const [availableItems, setAvailableItems] = useState<Item[]>([]);
+  const [addingItemId,   setAddingItemId]   = useState('');
 
   const [submitting, setSubmitting] = useState(false);
   const [error,      setError]      = useState('');
 
   useEffect(() => { getPriceLists().then(setPriceLists).catch(() => {}); }, []);
+  useEffect(() => { getItems(companyId).then(setAvailableItems).catch(() => {}); }, [companyId]);
 
   const fetchPrices = useCallback(async (priceListId: number) => {
     setFetchingPrices(true);
@@ -122,6 +141,36 @@ export function QuotationForm(props: QuotationFormProps) {
     return Number(p.unit_price) * (1 - discount / 100);
   }
 
+  function addItemLine() {
+    const id = Number(addingItemId);
+    const found = availableItems.find((i) => i.id === id);
+    if (!found) return;
+    setItemLines((prev) => [...prev, { item_id: found.id, item_code: found.code, item_name: found.name, quantity: 1, unit_price: null, discount: 0 }]);
+    setAddingItemId('');
+  }
+
+  function removeItemLine(idx: number) {
+    setItemLines((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function setItemQuantity(idx: number, raw: string) {
+    const value = raw === '' ? 1 : Math.max(1, Math.floor(Number(raw)));
+    if (isNaN(value)) return;
+    setItemLines((prev) => prev.map((l, i) => i !== idx ? l : { ...l, quantity: value }));
+  }
+
+  function setItemPrice(idx: number, raw: string) {
+    const value = raw === '' ? null : Number(raw);
+    if (value !== null && isNaN(value)) return;
+    setItemLines((prev) => prev.map((l, i) => i !== idx ? l : { ...l, unit_price: value }));
+  }
+
+  function setItemDiscount(idx: number, raw: string) {
+    const value = raw === '' ? 0 : Number(raw);
+    if (isNaN(value)) return;
+    setItemLines((prev) => prev.map((l, i) => i !== idx ? l : { ...l, discount: Math.min(100, Math.max(0, value)) }));
+  }
+
   const priceTotals = useMemo(() => {
     if (prices.size === 0) return [];
     const totals = new Map<string, { symbol: string; gross: number; subtotal: number }>();
@@ -150,24 +199,35 @@ export function QuotationForm(props: QuotationFormProps) {
     });
   }, [lines, prices, lineExtras, orderDiscountPct]);
 
-  function buildLinesPayload() {
-    return lines.map((l, idx) => {
+  function buildLinesPayload(): QuotationLinePayload[] {
+    const machineLines: QuotationLinePayload[] = lines.map((l, idx) => {
       const p        = prices.get(l.option_id);
       const discount = lineExtras[idx]?.discount ?? 0;
       if (p?.unit_price == null) {
-        return { characteristic_id: l.characteristic_id, option_id: l.option_id, quantity: 1 };
+        return { line_type: 'machine', characteristic_id: l.characteristic_id, option_id: l.option_id, quantity: 1 };
       }
       const unit_price      = Number(p.unit_price);
       const discount_amount = +(unit_price * (discount / 100)).toFixed(2);
       const line_total      = +(unit_price - discount_amount).toFixed(2);
-      return { characteristic_id: l.characteristic_id, option_id: l.option_id, unit_price, quantity: 1, discount_line: discount, discount_amount, line_total };
+      return { line_type: 'machine', characteristic_id: l.characteristic_id, option_id: l.option_id, unit_price, quantity: 1, discount_line: discount, discount_amount, line_total };
     });
+
+    const extraItemLines: QuotationLinePayload[] = itemLines.map((l) => {
+      if (l.unit_price == null) {
+        return { line_type: 'item', item_id: l.item_id, quantity: l.quantity };
+      }
+      const discount_amount = +(l.unit_price * l.quantity * (l.discount / 100)).toFixed(2);
+      const line_total      = +(l.unit_price * l.quantity - discount_amount).toFixed(2);
+      return { line_type: 'item', item_id: l.item_id, unit_price: l.unit_price, quantity: l.quantity, discount_line: l.discount, discount_amount, line_total };
+    });
+
+    return [...machineLines, ...extraItemLines];
   }
 
-  function buildTotalsPayload(linesPayload: ReturnType<typeof buildLinesPayload>) {
+  function buildTotalsPayload(linesPayload: QuotationLinePayload[]) {
     const lineTotals = linesPayload
-      .map((l) => ('line_total' in l ? l.line_total : null))
-      .filter((v): v is number => v !== null);
+      .map((l) => ('line_total' in l ? l.line_total : undefined))
+      .filter((v): v is number => v !== undefined);
     if (lineTotals.length === 0) return {};
     const subtotal        = +lineTotals.reduce((s, v) => s + v, 0).toFixed(2);
     const discount_amount = +(subtotal * (orderDiscountPct / 100)).toFixed(2);
@@ -209,7 +269,6 @@ export function QuotationForm(props: QuotationFormProps) {
     } finally { setSubmitting(false); }
   }
 
-  // En modo edit, hay precios si ya venían de la cotización o si se seleccionó lista
   const hasPriceList = !!selectedPriceListId || (!isCreate && prices.size > 0);
 
   return (
@@ -444,7 +503,134 @@ export function QuotationForm(props: QuotationFormProps) {
 
       </div>
 
-      {/* Tabla de ítems */}
+      {/* Ítems adicionales */}
+      <Card>
+        <CardContent className="p-0">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-muted/30">
+            <div className="flex items-center gap-1.5">
+              <Boxes size={13} className="text-primary" />
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                Ítems adicionales
+              </span>
+              {itemLines.length > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-semibold tabular-nums">
+                  {itemLines.length}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                title="Seleccionar ítem"
+                value={addingItemId}
+                onChange={(e) => setAddingItemId(e.target.value)}
+                disabled={availableItems.length === 0}
+                className="h-7 px-2 text-xs rounded-md border border-input bg-background focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 max-w-[240px]"
+              >
+                <option value="">
+                  {availableItems.length === 0 ? 'Sin ítems disponibles' : 'Seleccioná un ítem…'}
+                </option>
+                {availableItems.map((i) => (
+                  <option key={i.id} value={i.id}>{i.code} — {i.name}</option>
+                ))}
+              </select>
+              <Button type="button" size="sm" disabled={!addingItemId} onClick={addItemLine}>
+                <Plus size={13} /> Agregar
+              </Button>
+            </div>
+          </div>
+
+          {itemLines.length === 0 ? (
+            <div className="py-8 text-center text-muted-foreground">
+              <Boxes size={28} className="mx-auto mb-2 opacity-20" />
+              <p className="text-xs">Sin ítems adicionales. Usá el selector para agregar.</p>
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2">Código</th>
+                  <th className="text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2">Nombre</th>
+                  <th className="text-center text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-3 py-2 w-16">Cant.</th>
+                  <th className="text-right text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2">Precio unit.</th>
+                  <th className="text-center text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-3 py-2 w-24">Desc. %</th>
+                  <th className="text-right text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2">Subtotal</th>
+                  <th className="px-3 py-2"><span className="sr-only">Eliminar</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {itemLines.map((line, idx) => {
+                  const sub = line.unit_price != null
+                    ? +(line.unit_price * line.quantity * (1 - line.discount / 100)).toFixed(2)
+                    : null;
+                  return (
+                    <tr key={idx} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
+                      <td className="px-4 py-2 text-xs font-mono font-medium text-muted-foreground">{line.item_code}</td>
+                      <td className="px-4 py-2 text-sm font-medium">{line.item_name}</td>
+                      <td className="px-2 py-2 text-center">
+                        <input
+                          type="number"
+                          min={1}
+                          step={1}
+                          title="Cantidad"
+                          value={line.quantity}
+                          onChange={(e) => setItemQuantity(idx, e.target.value)}
+                          className="w-14 h-7 px-2 text-xs text-center rounded border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary/40 tabular-nums"
+                        />
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.01}
+                          title="Precio unitario"
+                          placeholder="0.00"
+                          value={line.unit_price ?? ''}
+                          onChange={(e) => setItemPrice(idx, e.target.value)}
+                          className="w-28 h-7 px-2 text-xs text-right rounded border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary/40 tabular-nums"
+                        />
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={0.5}
+                          title="Descuento %"
+                          value={line.discount}
+                          onChange={(e) => setItemDiscount(idx, e.target.value)}
+                          disabled={line.unit_price == null}
+                          className="w-16 h-7 px-2 text-xs text-center rounded border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary/40 disabled:opacity-35 disabled:cursor-not-allowed tabular-nums"
+                        />
+                      </td>
+                      <td className="px-4 py-2 text-right whitespace-nowrap">
+                        {sub != null ? (
+                          <span className="text-sm font-semibold text-primary tabular-nums">
+                            {sub.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        <button
+                          type="button"
+                          title="Eliminar ítem"
+                          onClick={() => removeItemLine(idx)}
+                          className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                        >
+                          <X size={13} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Tabla líneas de máquina */}
       <Card>
         <CardContent className="p-0">
           <table className="w-full text-sm">

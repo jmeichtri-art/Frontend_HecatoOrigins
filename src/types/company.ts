@@ -24,3 +24,21 @@ export interface UpdateCompanyPayload {
   type?: string;
   active?: boolean;
 }
+
+export type SapSettingValue = string | number | boolean | null;
+
+export interface SapSettingDefinition {
+  key: string;
+  label: string;
+  data_type: 'string' | 'number' | 'boolean';
+  description: string;
+  default_value: SapSettingValue;
+}
+
+export interface CompanySapSettings {
+  company_id: number;
+  configured: boolean;
+  [key: string]: SapSettingValue | number | boolean;
+}
+
+export type UpdateSapSettingsPayload = Record<string, SapSettingValue>;

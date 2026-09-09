@@ -1,5 +1,12 @@
 import api from './api';
-import { Company, CreateCompanyPayload, UpdateCompanyPayload } from '@/types/company';
+import {
+  Company,
+  CreateCompanyPayload,
+  UpdateCompanyPayload,
+  SapSettingDefinition,
+  CompanySapSettings,
+  UpdateSapSettingsPayload,
+} from '@/types/company';
 
 export async function getCompanies(): Promise<Company[]> {
   const response = await api.get('/api/v1/companies');
@@ -18,4 +25,22 @@ export async function updateCompany(id: number, payload: UpdateCompanyPayload): 
 
 export async function deleteCompany(id: number): Promise<void> {
   await api.delete(`/api/v1/companies/${id}`);
+}
+
+export async function getSapSettingDefinitions(): Promise<SapSettingDefinition[]> {
+  const response = await api.get('/api/v1/companies/sap-setting-definitions');
+  return response.data.data;
+}
+
+export async function getCompanySapSettings(companyId: number): Promise<CompanySapSettings> {
+  const response = await api.get(`/api/v1/companies/${companyId}/sap-settings`);
+  return response.data.data;
+}
+
+export async function updateCompanySapSettings(
+  companyId: number,
+  payload: UpdateSapSettingsPayload
+): Promise<CompanySapSettings> {
+  const response = await api.put(`/api/v1/companies/${companyId}/sap-settings`, payload);
+  return response.data.data;
 }

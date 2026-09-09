@@ -1,9 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { AlertCircle, Loader2, Plus, Pencil, Trash2, X, Check, Building2 } from 'lucide-react';
-import { getCompanies, createCompany, updateCompany, deleteCompany } from '@/services/company.service';
-import { Company, CreateCompanyPayload, UpdateCompanyPayload } from '@/types/company';
+import { AlertCircle, Loader2, Plus, Pencil, Trash2, X, Check, Building2, Settings2, RotateCcw } from 'lucide-react';
+import {
+  getCompanies, createCompany, updateCompany, deleteCompany,
+  getSapSettingDefinitions, getCompanySapSettings, updateCompanySapSettings,
+} from '@/services/company.service';
+import {
+  Company, CreateCompanyPayload, UpdateCompanyPayload,
+  SapSettingDefinition, CompanySapSettings, SapSettingValue,
+} from '@/types/company';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -44,7 +50,16 @@ export default function CompaniesPage() {
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [deleting, setDeleting]           = useState(false);
 
+  const [sapDefs, setSapDefs]           = useState<SapSettingDefinition[]>([]);
+  const [sapDefsError, setSapDefsError] = useState('');
+  const [sapCompany, setSapCompany]     = useState<Company | null>(null);
+
   useEffect(() => { loadCompanies(); }, []);
+  useEffect(() => {
+    getSapSettingDefinitions()
+      .then(setSapDefs)
+      .catch(() => setSapDefsError('No se pudo cargar el catálogo de configuración SAP.'));
+  }, []);
 
   async function loadCompanies() {
     setLoading(true);
@@ -63,6 +78,7 @@ export default function CompaniesPage() {
     setFormError('');
     setMode({ type: 'create' });
     setConfirmDelete(null);
+    setSapCompany(null);
   }
 
   function openEdit(company: Company) {
@@ -77,11 +93,18 @@ export default function CompaniesPage() {
     setFormError('');
     setMode({ type: 'edit', company });
     setConfirmDelete(null);
+    setSapCompany(null);
   }
 
   function closeForm() {
     setMode(null);
     setFormError('');
+  }
+
+  function openSapSettings(company: Company) {
+    setSapCompany(company);
+    setMode(null);
+    setConfirmDelete(null);
   }
 
   function setField<K extends keyof CompanyFormState>(key: K, value: CompanyFormState[K]) {
@@ -372,6 +395,13 @@ export default function CompaniesPage() {
                             ) : (
                               <>
                                 <button
+                                  onClick={() => openSapSettings(c)}
+                                  className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                                  title="Configuración SAP"
+                                >
+                                  <Settings2 size={14} />
+                                </button>
+                                <button
                                   onClick={() => openEdit(c)}
                                   className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
                                   title="Editar"
@@ -379,7 +409,7 @@ export default function CompaniesPage() {
                                   <Pencil size={14} />
                                 </button>
                                 <button
-                                  onClick={() => { setConfirmDelete(c.id); setMode(null); }}
+                                  onClick={() => { setConfirmDelete(c.id); setMode(null); setSapCompany(null); }}
                                   className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                                   title="Eliminar"
                                 >
@@ -398,6 +428,217 @@ export default function CompaniesPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* SAP settings panel */}
+      {sapCompany && (
+        <SapSettingsPanel
+          company={sapCompany}
+          defs={sapDefs}
+          defsError={sapDefsError}
+          onClose={() => setSapCompany(null)}
+        />
+      )}
     </div>
+  );
+}
+
+type SapFormValue = string | boolean;
+
+function SapSettingsPanel({
+  company,
+  defs,
+  defsError,
+  onClose,
+}: {
+  company: Company;
+  defs: SapSettingDefinition[];
+  defsError: string;
+  onClose: () => void;
+}) {
+  const [settings, setSettings]   = useState<CompanySapSettings | null>(null);
+  const [form, setForm]           = useState<Record<string, SapFormValue>>({});
+  const [loading, setLoading]     = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [saveError, setSaveError] = useState('');
+  const [saving, setSaving]       = useState(false);
+  const [saved, setSaved]         = useState(false);
+
+  useEffect(() => {
+    if (defs.length === 0) return;
+    let cancelled = false;
+    setLoading(true);
+    setLoadError('');
+    setSaveError('');
+    setSaved(false);
+    getCompanySapSettings(company.id)
+      .then((data) => {
+        if (cancelled) return;
+        setSettings(data);
+        const next: Record<string, SapFormValue> = {};
+        for (const def of defs) {
+          const raw = data[def.key];
+          next[def.key] = def.data_type === 'boolean'
+            ? raw === true
+            : raw === null || raw === undefined ? '' : String(raw);
+        }
+        setForm(next);
+      })
+      .catch(() => { if (!cancelled) setLoadError('No se pudo cargar la configuración SAP de esta compañía.'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [company.id, defs]);
+
+  function setFieldValue(key: string, value: SapFormValue) {
+    setForm((f) => ({ ...f, [key]: value }));
+    setSaveError('');
+    setSaved(false);
+  }
+
+  function resetField(def: SapSettingDefinition) {
+    const value = def.data_type === 'boolean'
+      ? def.default_value === true
+      : def.default_value === null || def.default_value === undefined ? '' : String(def.default_value);
+    setFieldValue(def.key, value);
+  }
+
+  async function handleSave() {
+    setSaveError('');
+    const payload: Record<string, SapSettingValue> = {};
+    for (const def of defs) {
+      const value = form[def.key];
+      if (def.data_type === 'boolean') {
+        payload[def.key] = Boolean(value);
+      } else if (def.data_type === 'number') {
+        const str = typeof value === 'string' ? value.trim() : '';
+        if (str === '') { payload[def.key] = null; continue; }
+        const num = Number(str);
+        if (isNaN(num)) { setSaveError(`${def.label}: debe ser un número.`); return; }
+        payload[def.key] = num;
+      } else {
+        const str = typeof value === 'string' ? value.trim() : '';
+        payload[def.key] = str === '' ? null : str;
+      }
+    }
+    setSaving(true);
+    try {
+      const updated = await updateCompanySapSettings(company.id, payload);
+      setSettings(updated);
+      setSaved(true);
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : 'No se pudo guardar la configuración SAP.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const showForm = !defsError && defs.length > 0 && !loading && !loadError;
+
+  return (
+    <Card className="border-primary/30 shadow-sm">
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="font-semibold text-base">Configuración SAP — {company.name}</h2>
+          <button
+            aria-label="Cerrar"
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {settings && (
+          <div className="mb-5">
+            <Badge variant={settings.configured ? 'success' : 'default'} dot>
+              {settings.configured ? 'Configurada' : 'Sin configurar (usando defaults)'}
+            </Badge>
+          </div>
+        )}
+
+        {defsError ? (
+          <div className="flex items-center gap-2 text-destructive bg-destructive/10 px-3 py-2 rounded-lg text-sm">
+            <AlertCircle size={14} /> {defsError}
+          </div>
+        ) : loadError ? (
+          <div className="flex items-center gap-2 text-destructive bg-destructive/10 px-3 py-2 rounded-lg text-sm">
+            <AlertCircle size={14} /> {loadError}
+          </div>
+        ) : defs.length === 0 || loading ? (
+          <div className="flex items-center justify-center py-10">
+            <Loader2 size={24} className="animate-spin text-muted-foreground" />
+          </div>
+        ) : null}
+
+        {showForm && (
+          <>
+            <div className="grid sm:grid-cols-2 gap-4 mt-4">
+              {defs.map((def) => (
+                <div key={def.key} className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      {def.label}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => resetField(def)}
+                      title="Restablecer al valor por defecto"
+                      className="text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      <RotateCcw size={12} />
+                    </button>
+                  </div>
+
+                  {def.data_type === 'boolean' ? (
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none h-[38px]">
+                      <div
+                        onClick={() => setFieldValue(def.key, !(form[def.key] as boolean))}
+                        className={`relative w-10 h-5 rounded-full transition-colors ${form[def.key] ? 'bg-primary' : 'bg-border'}`}
+                      >
+                        <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${form[def.key] ? 'translate-x-5' : 'translate-x-0'}`} />
+                      </div>
+                      <span className="text-sm">{form[def.key] ? 'Sí' : 'No'}</span>
+                    </label>
+                  ) : (
+                    <input
+                      type={def.data_type === 'number' ? 'number' : 'text'}
+                      step={def.data_type === 'number' ? 'any' : undefined}
+                      placeholder={
+                        def.default_value === null || def.default_value === undefined
+                          ? 'Sin valor (default de SAP)'
+                          : String(def.default_value)
+                      }
+                      value={(form[def.key] as string) ?? ''}
+                      onChange={(e) => setFieldValue(def.key, e.target.value)}
+                      className="px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                    />
+                  )}
+                  <p className="text-xs text-muted-foreground/70">{def.description}</p>
+                </div>
+              ))}
+            </div>
+
+            {saveError && (
+              <div className="flex items-center gap-2 mt-4 text-destructive bg-destructive/10 px-3 py-2 rounded-lg text-sm">
+                <AlertCircle size={14} /> {saveError}
+              </div>
+            )}
+            {saved && !saveError && (
+              <div className="flex items-center gap-2 mt-4 text-green-600 dark:text-green-400 bg-green-500/10 px-3 py-2 rounded-lg text-sm">
+                <Check size={14} /> Configuración guardada.
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 mt-5">
+              <Button variant="secondary" onClick={onClose} disabled={saving}>
+                Cerrar
+              </Button>
+              <Button onClick={handleSave} loading={saving}>
+                Guardar configuración
+              </Button>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
